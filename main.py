@@ -16,7 +16,7 @@ CORS(app)  # Enable CORS for Flutter app
 
 # Load the model
 try:
-    model = tf.keras.models.load_model('model.h5')
+    model = tf.keras.models.load_model('best_model.h5')
     logger.info("Model loaded successfully")
     logger.info(f"Model input shape: {model.input_shape}")
     logger.info(f"Model output shape: {model.output_shape}")
