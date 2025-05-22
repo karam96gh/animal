@@ -67,8 +67,8 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     """
-    Prediction endpoint
-    Expects JSON with 'image' field containing base64 encoded image
+    Prediction endpoint (file upload version)
+    Expects multipart/form-data with 'file' containing image file
     """
     try:
         if model is None:
@@ -76,34 +76,40 @@ def predict():
                 'status': 'error',
                 'message': 'Model not loaded'
             }), 500
-        
-        data = request.get_json()
-        
-        if 'image' not in data:
+
+        if 'file' not in request.files:
             return jsonify({
                 'status': 'error',
-                'message': 'No image data provided'
+                'message': 'No file part in the request'
             }), 400
-        
+
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({
+                'status': 'error',
+                'message': 'No file selected for uploading'
+            }), 400
+
+        # Read image from file and convert to bytes
+        image_bytes = file.read()
+
         # Preprocess image
-        processed_image = preprocess_image(data['image'])
-        
-        if processed_image is None:
-            return jsonify({
-                'status': 'error',
-                'message': 'Error processing image'
-            }), 400
-        
+        image = Image.open(io.BytesIO(image_bytes))
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        image = image.resize((224, 224))
+        img_array = np.array(image).astype('float32') / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+
         # Make prediction
-        predictions = model.predict(processed_image)
-        
-        # Process predictions based on your model type
+        predictions = model.predict(img_array)
+
+        # Process predictions
         if len(predictions.shape) > 1 and predictions.shape[1] > 1:
-            # Classification model
             predicted_class = int(np.argmax(predictions, axis=1)[0])
             confidence = float(np.max(predictions))
             probabilities = predictions[0].tolist()
-            
             result = {
                 'status': 'success',
                 'prediction': {
@@ -113,7 +119,6 @@ def predict():
                 }
             }
         else:
-            # Regression model or single output
             prediction_value = float(predictions[0][0])
             result = {
                 'status': 'success',
@@ -121,10 +126,10 @@ def predict():
                     'value': prediction_value
                 }
             }
-        
+
         logger.info(f"Prediction made successfully: {result}")
         return jsonify(result)
-        
+
     except Exception as e:
         logger.error(f"Error during prediction: {e}")
         return jsonify({
